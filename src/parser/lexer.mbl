@@ -1,0 +1,81 @@
+{
+let string_builder : StringBuilder = StringBuilder::new()
+
+let keywords : Map[String, Token] = {
+  "as": AS,
+  "case": CASE,
+  "else": ELSE,
+  "false": FALSE,
+  "fn": FN,
+  "if": IF,
+  "of": OF,
+  "then": THEN,
+  "true": TRUE,
+  "All": UALL,
+  "Bool": UBOOL,
+  "String": USTRING,
+  "Top": UTOP,
+  "Unit": UUNIT
+};
+}
+
+regex eol = ('\r'* '\n');
+regex spaces = [' ' '\t']+;
+regex lcid = ['a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '0'-'9']*;
+regex ucid = ['A'-'Z'] ['A'-'Z' 'a'-'z' '_' '0'-'9']*;
+
+rule token(lexbuf : StringLexbuf) -> (Token, Position, Position) {
+  parse {
+    eof => { (EOF, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    eol | spaces => { token(lexbuf) }
+    "*/" => { (UNEXP_EOC, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "/*" => {
+      match comment(lexbuf) {
+        None => token(lexbuf)
+        Some(t) => t
+      }
+    }
+    lcid as t => { (keywords[t].or(LCID(t)), lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    ucid as t => { (keywords[t].or(UCID(t)), lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "+" => { (CONCAT, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "=>" => { (DARROW, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "->" => { (ARROW, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "<:" => { (SUB, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    ":" => { (COLON, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "," => { (COMMA, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "." => { (DOT, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "=" => { (EQ, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    ">" => { (GT, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "()" => { (UNIT, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "{" => { (LCURLY, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "(" => { (LPAREN, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "[" => { (LSQUARE, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "<" => { (LT, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "}" => { (RCURLY, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    ")" => { (RPAREN, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "]" => { (RSQUARE, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    ";" => { (SEMI, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    "|" => { (VBAR, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    '"' => { string_builder.reset(); string(lexbuf, $startpos) }
+    _ as t => { (UNDEF_TOKEN(t), lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+  }
+}
+
+rule comment(lexbuf : StringLexbuf) -> (Token, Position, Position)? {
+  parse {
+    "*/"=> { None }
+    eof => { Some((UNEXP_EOF, lexbuf.get_position($startpos), lexbuf.get_position($endpos))) }
+    _ => { comment(lexbuf) }
+  }
+}
+
+rule string(lexbuf : StringLexbuf, start : Int) -> (Token, Position, Position) {
+  parse {
+    '"' => { (STRINGV(string_builder.to_string()), lexbuf.get_position(start), lexbuf.get_position($startpos)) }
+    eol => { (UNEXP_EOL, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    eof => { (UNEXP_EOF, lexbuf.get_position($startpos), lexbuf.get_position($endpos)) }
+    _ as t => { string_builder.write_char(t); string(lexbuf, start) }
+  }
+}
+
+{}

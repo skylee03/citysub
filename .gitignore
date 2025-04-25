@@ -1,0 +1,7 @@
+build/
+node_modules/
+target/
+.mooncakes/
+src/parser/lexer.mbt
+src/parser/parser.mbt
+src/parser/parser.mbt.map.json

@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "codemirror": "^5.65.19"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4"
+  },
+  "scripts": {
+    "build": "moon build && mkdir -p build/ && cp -rf src/playground/* target/wasm-gc/release/build/interpreter/interpreter.wasm node_modules/codemirror/lib/ examples/ build/",
+    "clean": "moon clean && rm -rf src/parser/{lexer.mbt,parser.mbt,parser.mbt.map.json} node_modules/ build/",
+    "reinstall": "bun clean && bun install",
+    "rebuild": "bun reinstall && bun run build",
+    "serve": "python3 -m http.server 8080 -d build/"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "import": [
+    "skylee03/citysub/core",
+    "skylee03/citysub/info",
+    "skylee03/citysub/parser"
+  ],
+  "link": {
+    "wasm-gc": {
+      "exports": ["interpret"],
+      "use-js-builtin-string": true
+    }
+  }
+}

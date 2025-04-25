@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+      - name: moon version
+        run: moon version --all
+      - name: install bun
+        uses: oven-sh/setup-bun@v2
+      - name: moon check
+        run: |
+          moon update
+          moon check
+      - name: format diff
+        run: |
+          moon fmt
+          git diff
+      - name: install bun dependencies
+        run: bun install
+      - name: run biome
+        run: bunx biome ci
+      - name: moon test
+        run: moon test
+      - name: build playground
+        run: bun run build
+      - name: upload playground artifact
+        id: deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/
+  
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: check-and-build
+    steps:
+      - name: deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
+          

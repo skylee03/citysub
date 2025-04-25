@@ -1,0 +1,266 @@
+%derive<Show> Token
+%position<@info.Position>
+%start toplevel
+
+%token EOF
+%token UNEXP_EOF
+%token UNEXP_EOC
+%token UNEXP_EOL
+%token<Char> UNDEF_TOKEN
+%token AS           "as"
+%token CASE         "case"
+%token ELSE         "else"
+%token FALSE        "false"
+%token FN           "fn"
+%token IF           "if"
+%token OF           "of"
+%token THEN         "then"
+%token TRUE         "true"
+%token UALL         "All"
+%token UBOOL        "Bool"
+%token USTRING      "String"
+%token UTOP         "Top"
+%token UUNIT        "Unit"
+%token<String> LCID
+%token<String> UCID
+%token<String> STRINGV
+%token CONCAT       "+"
+%token DARROW       "=>"
+%token ARROW        "->"
+%token SUB          "<:"
+%token COLON        ":"
+%token COMMA        ","
+%token DOT          "."
+%token EQ           "="
+%token GT           ">"
+%token UNIT         "()"
+%token LCURLY       "{"
+%token LPAREN       "("
+%token LSQUARE      "["
+%token LT           "<"
+%token RCURLY       "}"
+%token RPAREN       ")"
+%token RSQUARE      "]"
+%token SEMI         ";"
+%token VBAR         "|"
+
+%left "+"
+
+%type<ParseToplevel> toplevel
+%type<ParseCommand> command
+%type<ParseTerm> term
+%type<ParseCases> cases
+%type<ParseCase> case
+%type<ParseTerm> app_term
+%type<ParseTerm> path_term
+%type<ParseTerm> ascribe_term
+%type<ParseTerm> term_seq
+%type<ParseTerm> atom_term
+%type<ParseLabelTerms> label_terms
+%type<ParseLabelTerms> nonempty_label_terms
+%type<ParseLabelTerm> label_term
+%type<ParseType> type
+%type<ParseType> arr_type
+%type<ParseType> atom_type
+%type<ParseLabelTypes> label_types
+%type<ParseLabelTypes> nonempty_label_types
+%type<ParseLabelType> label_type
+
+%%
+
+toplevel
+  : EOF                                           { fn(ctx) { (Nil, ctx) } }
+  | command ";" toplevel                          {
+      fn(ctx) {
+        let (cmd, ctx1) = $1!(ctx)
+        let (cmds, ctx2) = $3!(ctx1)
+        (Cons(cmd, cmds), ctx2)
+      }
+    }
+  ;
+
+command
+  : term                                          { fn(ctx) { (Eval(FI($startpos, $endpos), $1!(ctx)), ctx) } }
+  | LCID "=" term                                 { fn(ctx) { (Bind(FI($startpos, $endpos), $1, TmAbb($3!(ctx), None)), ctx.add_name($1)) } }
+  | LCID ":" type                                 { fn(ctx) { (Bind(FI($startpos, $endpos), $1, Var($3!(ctx))), ctx.add_name($1)) } }
+  | UCID "=" type                                 { fn(ctx) { (Bind(FI($startpos, $endpos), $1, TyAbb($3!(ctx))), ctx.add_name($1)) } }
+  | UCID "<:" type                                { fn(ctx) { (Bind(FI($startpos, $endpos), $1, TyVar($3!(ctx))), ctx.add_name($1)) } }
+  ;
+
+term
+  : app_term                                      { $1 }
+  | term "+" term                                 { fn(ctx) { Concat(FI($startpos, $endpos), $1!(ctx), $3!(ctx)) } }
+  | "if" term "then" term "else" term             { fn(ctx) { If(FI($startpos, $endpos), $2!(ctx), $4!(ctx), $6!(ctx)) } }
+  | "case" term "of" cases                        { fn(ctx) { Case(FI($startpos, $endpos), $2!(ctx), $4!(ctx)) } }
+  | "fn" LCID ":" type "." term                   {
+      fn(ctx) {
+        let ctx1 = ctx.add_name($2)
+        Abs(FI($startpos, $endpos), $2, $4!(ctx), $6!(ctx1))
+      }
+    }
+  | "fn" UCID "<:" type "." term                  {
+      fn(ctx) {
+        let ctx1 = ctx.add_name($2)
+        TAbs(FI($startpos, $endpos), $2, $4!(ctx), $6!(ctx1))
+      }
+    }
+  ;
+
+cases
+  : case                                          { fn(ctx) { Cons($1!(ctx), Nil) } }
+  | case "|" cases                                { fn(ctx) { Cons($1!(ctx), $3!(ctx)) } }
+  ;
+
+case
+  : "<" LCID "=" LCID ">" "=>" app_term           {
+      fn(ctx) {
+        let ctx1 = ctx.add_name($4)
+        ($2, ($4, $7!(ctx1)))
+      }
+    }
+  ;
+
+app_term
+  : path_term                                     { $1 }
+  | app_term path_term                            { fn(ctx) { App(FI($startpos, $endpos), $1!(ctx), $2!(ctx)) } }
+  | app_term "[" type "]"                         { fn(ctx) { TApp(FI($startpos, $endpos), $1!(ctx), $3!(ctx)) } }
+  ;
+
+path_term
+  : ascribe_term                                  { $1 }
+  | path_term "." LCID                            { fn(ctx) { Proj(FI($startpos, $endpos), $1!(ctx), $3) } }
+  ;
+
+ascribe_term
+  : atom_term                                     { $1 }
+  | atom_term "as" type                           { fn(ctx) { Ascribe(FI($startpos, $endpos), $1!(ctx), $3!(ctx)) } }
+  ;
+
+term_seq
+  : term                                          { $1 }
+  | term ";" term_seq                             {
+      fn(ctx) {
+        let info = @info.FI($startpos, $endpos)
+        App(info, Abs(info, "_", Unit, $3!(ctx.add_name("_"))), $1!(ctx))
+      }
+    }
+  ;
+
+atom_term
+  : "(" term_seq ")"                              { $2 }
+  | "true"                                        { fn(_) { True(FI($startpos, $endpos)) } }
+  | "false"                                       { fn(_) { False(FI($startpos, $endpos)) } }
+  | LCID                                          { fn(ctx) { Var(FI($startpos, $endpos), ctx.name_to_index!($1, FI($startpos, $endpos)), ctx.length()) } }
+  | "()"                                          { fn(_) { Unit(FI($startpos, $endpos)) } }
+  | "{" label_terms "}"                           { fn(ctx) { Record(FI($startpos, $endpos), $2!(ctx, 1)) } }
+  | "<" LCID "=" term ">" "as" type               { fn(ctx) { Tag(FI($startpos, $endpos), $2, $4!(ctx), $7!(ctx)) } }
+  | STRINGV                                       { fn(_) { String(FI($startpos, $endpos), $1) } }
+  ;
+
+label_terms
+  :                                               { fn(_, _) { Nil } }
+  | nonempty_label_terms                          { $1 }
+  ;
+
+nonempty_label_terms
+  : label_term                                    { fn(ctx, i) { Cons($1!(ctx, i), Nil) } }
+  | label_term "," nonempty_label_terms           { fn(ctx, i) { Cons($1!(ctx, i), $3!(ctx, i + 1)) } }
+  ;
+
+label_term
+  : LCID "=" term                                 { fn(ctx, _) { ($1, $3!(ctx)) } }
+  ;
+
+type
+  : arr_type                                      { $1 }
+  | "All" UCID "<:" type "." type                 { fn(ctx) { All($2, $4!(ctx), $6!(ctx.add_name($2))) } }
+  ;
+
+arr_type
+  : atom_type                                     { $1 }
+  | atom_type "->" arr_type                       { fn(ctx) { Arr($1!(ctx), $3!(ctx)) } }
+  ;
+
+atom_type
+  : "(" type ")"                                  { $2 }
+  | "Bool"                                        { fn(_) { Bool } }
+  | UCID                                          {
+      fn(ctx) {
+        if ctx.is_name_bound($1) {
+          Var(ctx.name_to_index!($1, FI($startpos, $endpos)), ctx.length())
+        } else {
+          Id($1)
+        }
+      }
+    }
+  | "Unit"                                        { fn(_) { Unit } }
+  | "{" label_types "}"                           { fn(ctx) { Record($2!(ctx, 1)) } }
+  | "<" label_types ">"                           { fn(ctx) { Variant($2!(ctx, 1)) } }
+  | "String"                                      { fn(_) { String } }
+  | "Top"                                         { fn(_) { Top } }
+  ;
+
+label_types
+  :                                               { fn(_, _) { Nil } }
+  | nonempty_label_types                          { $1 }
+  ;
+
+nonempty_label_types
+  : label_type                                    { fn(ctx, i) { Cons($1!(ctx, i), Nil) } }
+  | label_type "," nonempty_label_types           { fn(ctx, i) { Cons($1!(ctx, i), $3!(ctx, i + 1)) } }
+  ;
+
+label_type
+  : LCID ":" type                                 { fn(ctx, _) { ($1, $3!(ctx)) } }
+  ;
+
+%%
+
+typealias @core.(Command, Context, Term, Type)
+
+typealias ParseToplevel = (Context) -> (
+  @immut/list.T[Command],
+  Context,
+)!Error
+
+typealias ParseCommand = (Context) -> (Command, Context)!Error
+
+typealias ParseTerm = (Context) -> Term!Error
+
+typealias ParseCases = (Context) -> @immut/list.T[
+  (String, (String, Term)),
+]!Error
+
+typealias ParseCase = (Context) -> (String, (String, Term))!Error
+
+typealias ParseLabelTerms = (Context, Int) -> @immut/list.T[
+  (String, Term),
+]!Error
+
+typealias ParseLabelTerm = (Context, Int) -> (String, Term)!Error
+
+typealias ParseType = (Context) -> Type!Error
+
+typealias ParseLabelTypes = (Context, Int) -> @immut/list.T[
+  (String, Type),
+]!Error
+
+typealias ParseLabelType = (Context, Int) -> (String, Type)!Error
+
+pub fn parse!(code : String) -> ParseToplevel {
+  try {
+    let lexbuf = StringLexbuf::from_string(code)
+    toplevel!(fn() { token(lexbuf) }, { lnum: 1, cnum: 0 })
+  } catch {
+    UnexpectedToken(t, (start, end), _) => {
+      let msg = match t {
+        UNEXP_EOC => "unexpected end of comment"
+        UNEXP_EOF | EOF => "unexpected end of file"
+        UNEXP_EOL => "unexpected end of line"
+        UNDEF_TOKEN(c) => "undefined token \"\{c}\""
+        _ as t => "unexpected token \"\{t}\""
+      }
+      @info.error_info!(msg, info=FI(start, end))
+    }
+  }
+}

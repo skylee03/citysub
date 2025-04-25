@@ -1,0 +1,11 @@
+{
+  "import": ["skylee03/citysub/core", "skylee03/citysub/info"],
+  "warn-list": "-6",
+  "pre-build": [
+    {
+      "command": "$mod_dir/.mooncakes/moonbitlang/yacc/moonyacc --input-mode pull $input -o $output",
+      "input": "parser.mbty",
+      "output": "parser.mbt"
+    }
+  ]
+}

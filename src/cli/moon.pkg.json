@@ -1,0 +1,9 @@
+{
+  "is-main": true,
+  "import": [
+    "moonbitlang/x/fs",
+    "moonbitlang/x/sys",
+    "skylee03/citysub/interpreter",
+    "Yoorkin/ArgParser"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "skylee03/citysub",
+  "version": "0.1.0",
+  "deps": {
+    "moonbitlang/x": "0.4.26",
+    "Yoorkin/ArgParser": "0.1.9"
+  },
+  "bin-deps": {
+    "moonbitlang/ulex": "0.2.3",
+    "moonbitlang/yacc": "0.3.39"
+  },
+  "readme": "README.md",
+  "license": "MIT",
+  "source": "src"
+}
