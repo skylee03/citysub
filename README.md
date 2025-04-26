@@ -1,4 +1,8 @@
-# Citysub
+<div align="center">
+
+![](assets/citysub.svg)
+
+</div>
 
 A toy programming language that supports multiple bounded quantification mechanisms.
 
